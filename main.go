@@ -27,8 +27,9 @@ type Message struct {
 		Username  string `json:"username"`
 		Type      string `json:"type"`
 	} `json:"chat"`
-	Date int    `json:"date"`
-	Text string `json:"text"`
+	Date       int    `json:"date"`
+	Text       string `json:"text"`
+	isAnswered bool
 }
 
 type Result struct {
@@ -100,8 +101,15 @@ func main() {
 
 	upd := Update{}
 
-	getUpdates(url, &upd)
+	for {
+		getUpdates(url, &upd)
 
-	chatId := upd.Result[len(upd.Result)-1].Message.Chat.ID
-	sendMessage(url, "Hi!", chatId)
+		chatId := upd.Result[len(upd.Result)-1].Message.Chat.ID
+
+		if upd.Result[len(upd.Result)-1].Message.Text == "/start" &&
+			upd.Result[len(upd.Result)-1].Message.isAnswered != true {
+			sendMessage(url, "Okay, lets start", chatId)
+			upd.Result[len(upd.Result)-1].Message.isAnswered = true
+		}
+	}
 }
