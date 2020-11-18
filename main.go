@@ -1,17 +1,37 @@
 package main
 
 import (
+	"archive/zip"
 	"bytes"
+	"context"
+	"database/sql"
 	"encoding/json"
 	"flag"
 	"fmt"
+	_ "github.com/mattn/go-sqlite3"
 	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 )
+
+type JsonRequest struct {
+	Page string `json:"page"`
+	Data []struct {
+		Name []struct {
+			Text string `json:"text"`
+		} `json:"name"`
+		Prices []struct {
+			Text string `json:"text"`
+		} `json:"prices"`
+		URLImage []struct {
+			Img string `json:"img"`
+		} `json:"url_image"`
+	} `json:"data"`
+}
 
 type Message struct {
 	MessageID int `json:"message_id"`
@@ -62,8 +82,6 @@ type scrapResponse struct {
 	} `json:"0"`
 }
 
-var chatIDs []int
-
 const scrapToken = "e4aa3204c-6f7c-4a96-893a-9587feab91d3"
 const scrapAPIKey = "3bb96bf16ab908ba9a4b94016ccd0a5616f5f067a21741bf9bb8324b8eabb49bZFkHzJ41uoB7WJwgVLamxvacZlOlUube3Ddn"
 
@@ -84,6 +102,7 @@ func getMe(url string) []byte {
 }
 
 func getUpdates(url string, u *Update) {
+	//fmt.Print("Getting new messages...")
 	get, err := http.Get(url + "getUpdates")
 
 	defer get.Body.Close()
@@ -99,6 +118,7 @@ func getUpdates(url string, u *Update) {
 
 	json.Unmarshal(body, &u)
 
+	//fmt.Println("done!")
 	return
 }
 
@@ -118,13 +138,13 @@ func sendMessage(url, text string, chatID int) {
 	}
 }
 
-func checkInId(id int) bool {
-	for i := range chatIDs {
+func checkInId(id int, list []int) bool {
+	for i := range list {
 		if i == id {
-			return true
+			return false
 		}
 	}
-	return false
+	return true
 }
 
 func getLatestScrap(sc *scrapResponse) {
@@ -151,8 +171,9 @@ func getLatestScrap(sc *scrapResponse) {
 	json.Unmarshal(body, &sc)
 }
 
-func getZip(sR *scrapResponse) {
-	jobId :=  sR.Num0.JobID
+func getFile(sR *scrapResponse, jr *JsonRequest) {
+	fmt.Println("Scrapping last data...")
+	jobId := sR.Num0.JobID
 	downloadKey := sR.Num0.DataDownloadKey
 	url := fmt.Sprintf("https://api.prowebscraper.com/v1/download/job-%s/%s/json", jobId, downloadKey)
 
@@ -176,11 +197,27 @@ func getZip(sR *scrapResponse) {
 
 	err = WriteToFile("file.zip", string(body))
 	if err != nil {
-		log.Fatal(err)
+		fmt.Println(err.Error())
+	}
+
+	fmt.Println("Scrapping last data...DONE!")
+
+	file := Unzip("file.zip")
+	UnmarshallJsonFile(file, jr)
+
+	err = os.Remove(file)
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+
+	err = os.Remove("file.zip")
+	if err != nil {
+		fmt.Println(err.Error())
 	}
 }
 
 func WriteToFile(filename string, data string) error {
+	fmt.Print("Writing to the .zip file...")
 	file, err := os.Create(filename)
 	if err != nil {
 		return err
@@ -191,39 +228,155 @@ func WriteToFile(filename string, data string) error {
 	if err != nil {
 		return err
 	}
+	fmt.Println("done!")
 	return file.Sync()
 }
 
+func UnmarshallJsonFile(filename string, jr *JsonRequest) {
+	fmt.Print("getting json...")
+	defer fmt.Println("done!")
+	data, err := ioutil.ReadFile(filename)
+	if err != nil {
+		fmt.Println("File reading error", err)
+		return
+	}
+	json.Unmarshal(data, &jr)
+}
+
+func Unzip(src string) string {
+	fmt.Print("Unzipping...")
+
+	r, err := zip.OpenReader(src)
+	if err != nil {
+		panic(err.Error())
+	}
+	defer r.Close()
+
+	fpath := r.File[0].Name
+
+	outFile, err := os.OpenFile(fpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, r.File[0].Mode())
+	if err != nil {
+		panic(err.Error)
+	}
+
+	rc, err := r.File[0].Open()
+	if err != nil {
+		panic(err.Error())
+	}
+
+	_, err = io.Copy(outFile, rc)
+
+	// Close the file without defer to close before next iteration of loop
+	outFile.Close()
+	rc.Close()
+
+	fmt.Println(" done!")
+	return r.File[0].Name
+}
+
+func insertData(name, price, imageUrl string) {
+	db, err := sql.Open("sqlite3", "main_db.sqlite3")
+	if err != nil {
+		panic(err.Error())
+	}
+	defer db.Close()
+
+	ctx, cancelfunc := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelfunc()
+
+	_, err = db.ExecContext(ctx,
+		"INSERT INTO products (name, price, image_url) VALUES ($1, $2, $3)",
+		name,
+		price,
+		imageUrl)
+}
+
+func getChats(chatIDs []int) []int {
+	db, err := sql.Open("sqlite3", "main_db.sqlite3")
+	if err != nil {
+		panic(err.Error())
+	}
+	defer db.Close()
+
+	ctx, cancelfunc := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelfunc()
+
+	rows, err := db.QueryContext(ctx, "SELECT id FROM chats")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var id int
+		if err := rows.Scan(&id); err != nil {
+			log.Fatal(err)
+		}
+		if checkInId(id, chatIDs) {
+			chatIDs = append(chatIDs, id)
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Fatal(err)
+	}
+
+	return chatIDs
+}
+
+func addNewChat(id int) {
+	db, err := sql.Open("sqlite3", "main_db.sqlite3")
+	if err != nil {
+		panic(err.Error())
+	}
+	defer db.Close()
+
+	ctx, cancelfunc := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelfunc()
+
+	_, err = db.ExecContext(ctx,
+		"INSERT INTO chat (id) VALUES ($1)",
+		id)
+}
+
 func main() {
+	fmt.Println("Starting...")
+
 	token := flag.String("token", "", "Telegram token value")
 	flag.Parse()
 
 	url := fmt.Sprintf("https://api.telegram.org/bot%s/", *token)
 
+	ticker5h := time.NewTicker(5 * time.Hour)
+	ticker1d := time.NewTicker(24 * time.Hour)
 	upd := Update{}
-
 	scResp := scrapResponse{}
-
-	getLatestScrap(&scResp)
-	getZip(&scResp)
+	jsonReq := JsonRequest{}
+	var chatIDs []int
+	chatIDs = getChats(chatIDs)
 
 	for {
-		getUpdates(url, &upd)
+		select {
+		case <-ticker5h.C:
+			getUpdates(url, &upd)
 
-		chatId := upd.Result[len(upd.Result)-1].Message.Chat.ID
+		case <-ticker1d.C:
+			getLatestScrap(&scResp)
 
-		if !checkInId(chatId) {
-			chatIDs = append(chatIDs, chatId)
+			getFile(&scResp, &jsonReq)
+		default:
+			getUpdates(url, &upd)
+
+			for i := 0; i < len(upd.Result); i++ {
+				chatId := upd.Result[i].Message.Chat.ID
+
+				if upd.Result[i].Message.Text == "/start" && !checkInId(chatId, chatIDs) {
+					fmt.Println(chatIDs, chatId)
+					sendMessage(url, "Okay, lets start", chatId)
+					addNewChat(chatId)
+					chatIDs = append(chatIDs, chatId)
+				}
+			}
 		}
-
-		if upd.Result[len(upd.Result)-1].Message.Text == "/start" &&
-			upd.Result[len(upd.Result)-1].Message.isAnswered != true {
-			sendMessage(url, "Okay, lets start", chatId)
-			upd.Result[len(upd.Result)-1].Message.isAnswered = true
-		}
-
 	}
 }
-
-//https://www.aliexpress.com/premium/category/100005413.html?trafficChannel=ppc&catName=Guitar&CatId=100005413&ltype=premium&SortType=default&page=1&isrefine=y
-//e4aa3204c-6f7c-4a96-893a-9587feab91d3- scraper token
