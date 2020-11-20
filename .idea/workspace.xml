@@ -20,9 +20,13 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="8aca9653-2745-4b75-9d94-e6a3d4d524f9" name="Default Changelist" comment="">
+      <change afterPath="$PROJECT_DIR$/.idea/dataSources.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/AliBot.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/AliBot.iml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/file.zip" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/main.go" beforeDir="false" afterPath="$PROJECT_DIR$/main.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/main_db.sqlite3" beforeDir="false" afterPath="$PROJECT_DIR$/main_db.sqlite3" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -49,12 +53,14 @@
     <option name="showLibraryContents" value="true" />
   </component>
   <component name="PropertiesComponent">
+    <property name="ASKED_SHARE_PROJECT_CONFIGURATION_FILES" value="true" />
     <property name="DefaultGoTemplateProperty" value="Go File" />
     <property name="RunOnceActivity.OpenProjectViewOnStart" value="true" />
+    <property name="SHARE_PROJECT_CONFIGURATION_FILES" value="true" />
     <property name="WebServerToolWindowFactoryState" value="false" />
     <property name="go.import.settings.migrated" value="true" />
     <property name="go.tried.to.enable.integration.vgo.integrator" value="true" />
-    <property name="last_opened_file_path" value="$USER_HOME$" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$" />
     <property name="node.js.detected.package.eslint" value="true" />
     <property name="node.js.detected.package.tslint" value="true" />
     <property name="node.js.path.for.package.eslint" value="project" />
@@ -62,26 +68,15 @@
     <property name="node.js.selected.package.eslint" value="(autodetect)" />
     <property name="node.js.selected.package.tslint" value="(autodetect)" />
   </component>
-  <component name="RunManager" selected="Go Build.go build main.go (1)">
-    <configuration name="go build json.go" type="GoApplicationRunConfiguration" factoryName="Go Application" temporary="true" nameIsGenerated="true">
+  <component name="RunManager">
+    <configuration name="go build main.go" type="GoApplicationRunConfiguration" factoryName="Go Application" nameIsGenerated="true">
       <module name="AliBot" />
       <working_directory value="$PROJECT_DIR$" />
-      <kind value="FILE" />
-      <filePath value="$USER_HOME$/Documents/Projects/Golang/json.go" />
-      <directory value="$PROJECT_DIR$" />
-      <method v="2" />
-    </configuration>
-    <configuration name="go build main.go (1)" type="GoApplicationRunConfiguration" factoryName="Go Application" temporary="true" nameIsGenerated="true">
-      <module name="AliBot" />
-      <working_directory value="$PROJECT_DIR$" />
-      <kind value="FILE" />
-      <filePath value="$PROJECT_DIR$/../JustTypeNews/main.go" />
-      <directory value="$PROJECT_DIR$" />
-      <method v="2" />
-    </configuration>
-    <configuration name="go build main.go" type="GoApplicationRunConfiguration" factoryName="Go Application" temporary="true" nameIsGenerated="true">
-      <module name="AliBot" />
-      <working_directory value="$PROJECT_DIR$" />
+      <go_parameters value="-i" />
+      <parameters value="-token 1413348137:AAG6Ol7_U_AiyDA1N5WrirAlKbKwh1sPANg" />
+      <envs>
+        <env name="GOPATH" value="$PROJECT_DIR$/../../" />
+      </envs>
       <kind value="FILE" />
       <filePath value="$PROJECT_DIR$/main.go" />
       <directory value="$PROJECT_DIR$" />
@@ -89,8 +84,6 @@
     </configuration>
     <recent_temporary>
       <list>
-        <item itemvalue="Go Build.go build main.go (1)" />
-        <item itemvalue="Go Build.go build json.go" />
         <item itemvalue="Go Build.go build main.go" />
       </list>
     </recent_temporary>
@@ -109,27 +102,76 @@
         </entry>
       </map>
     </option>
+    <option name="oldMeFiltersMigrated" value="true" />
   </component>
   <component name="WindowStateProjectService">
-    <state x="743" y="311" width="424" height="491" key="FileChooserDialogImpl" timestamp="1605611274416">
+    <state x="364" y="401" width="1182" height="311" key="#SQL_Dialects" timestamp="1605872386141">
       <screen x="0" y="27" width="1920" height="1053" />
     </state>
-    <state x="743" y="311" width="424" height="491" key="FileChooserDialogImpl/0.27.1920.1053@0.27.1920.1053" timestamp="1605611274416" />
-    <state width="918" height="277" key="GridCell.Tab.0.bottom" timestamp="1605631114765">
+    <state x="364" y="401" width="1182" height="311" key="#SQL_Dialects/0.27.1920.1053@0.27.1920.1053" timestamp="1605872386141" />
+    <state x="292" y="260" width="1084" height="805" key="#com.intellij.execution.impl.EditConfigurationsDialog" timestamp="1605870805143">
       <screen x="0" y="27" width="1920" height="1053" />
     </state>
-    <state width="918" height="277" key="GridCell.Tab.0.bottom/0.27.1920.1053@0.27.1920.1053" timestamp="1605631114765" />
-    <state width="918" height="277" key="GridCell.Tab.0.center" timestamp="1605631114764">
+    <state x="292" y="260" width="1084" height="805" key="#com.intellij.execution.impl.EditConfigurationsDialog/0.27.1920.1053@0.27.1920.1053" timestamp="1605870805143" />
+    <state x="672" y="353" width="565" height="408" key="#com.intellij.fileTypes.FileTypeChooser" timestamp="1605870715313">
       <screen x="0" y="27" width="1920" height="1053" />
     </state>
-    <state width="918" height="277" key="GridCell.Tab.0.center/0.27.1920.1053@0.27.1920.1053" timestamp="1605631114764" />
-    <state width="918" height="277" key="GridCell.Tab.0.left" timestamp="1605631114764">
+    <state x="672" y="353" width="565" height="408" key="#com.intellij.fileTypes.FileTypeChooser/0.27.1920.1053@0.27.1920.1053" timestamp="1605870715313" />
+    <state x="773" y="266" width="424" height="591" key="#com.intellij.ide.macro.MacrosDialog" timestamp="1605865666763">
       <screen x="0" y="27" width="1920" height="1053" />
     </state>
-    <state width="918" height="277" key="GridCell.Tab.0.left/0.27.1920.1053@0.27.1920.1053" timestamp="1605631114764" />
-    <state width="918" height="277" key="GridCell.Tab.0.right" timestamp="1605631114765">
+    <state x="773" y="266" width="424" height="591" key="#com.intellij.ide.macro.MacrosDialog/0.27.1920.1053@0.27.1920.1053" timestamp="1605865666763" />
+    <state x="844" y="246" width="587" height="655" key="EnvironmentVariablesDialog" timestamp="1605865896400">
       <screen x="0" y="27" width="1920" height="1053" />
     </state>
-    <state width="918" height="277" key="GridCell.Tab.0.right/0.27.1920.1053@0.27.1920.1053" timestamp="1605631114765" />
+    <state x="844" y="246" width="587" height="655" key="EnvironmentVariablesDialog/0.27.1920.1053@0.27.1920.1053" timestamp="1605865896400" />
+    <state x="743" y="311" width="424" height="491" key="FileChooserDialogImpl" timestamp="1605870790108">
+      <screen x="0" y="27" width="1920" height="1053" />
+    </state>
+    <state x="743" y="311" width="424" height="491" key="FileChooserDialogImpl/0.27.1920.1053@0.27.1920.1053" timestamp="1605870790108" />
+    <state width="1294" height="247" key="GridCell.Tab.0.bottom" timestamp="1605891594452">
+      <screen x="0" y="27" width="1920" height="1053" />
+    </state>
+    <state width="1294" height="247" key="GridCell.Tab.0.bottom/0.27.1920.1053@0.27.1920.1053" timestamp="1605891594452" />
+    <state width="1294" height="247" key="GridCell.Tab.0.center" timestamp="1605891594447">
+      <screen x="0" y="27" width="1920" height="1053" />
+    </state>
+    <state width="1294" height="247" key="GridCell.Tab.0.center/0.27.1920.1053@0.27.1920.1053" timestamp="1605891594447" />
+    <state width="1294" height="247" key="GridCell.Tab.0.left" timestamp="1605891594447">
+      <screen x="0" y="27" width="1920" height="1053" />
+    </state>
+    <state width="1294" height="247" key="GridCell.Tab.0.left/0.27.1920.1053@0.27.1920.1053" timestamp="1605891594447" />
+    <state width="1294" height="247" key="GridCell.Tab.0.right" timestamp="1605891594451">
+      <screen x="0" y="27" width="1920" height="1053" />
+    </state>
+    <state width="1294" height="247" key="GridCell.Tab.0.right/0.27.1920.1053@0.27.1920.1053" timestamp="1605891594450" />
+    <state width="1878" height="330" key="GridCell.Tab.1.bottom" timestamp="1605877644553">
+      <screen x="0" y="27" width="1920" height="1053" />
+    </state>
+    <state width="1878" height="330" key="GridCell.Tab.1.bottom/0.27.1920.1053@0.27.1920.1053" timestamp="1605877644553" />
+    <state width="1878" height="330" key="GridCell.Tab.1.center" timestamp="1605877644551">
+      <screen x="0" y="27" width="1920" height="1053" />
+    </state>
+    <state width="1878" height="330" key="GridCell.Tab.1.center/0.27.1920.1053@0.27.1920.1053" timestamp="1605877644551" />
+    <state width="1878" height="330" key="GridCell.Tab.1.left" timestamp="1605877644549">
+      <screen x="0" y="27" width="1920" height="1053" />
+    </state>
+    <state width="1878" height="330" key="GridCell.Tab.1.left/0.27.1920.1053@0.27.1920.1053" timestamp="1605877644549" />
+    <state width="1878" height="330" key="GridCell.Tab.1.right" timestamp="1605877644552">
+      <screen x="0" y="27" width="1920" height="1053" />
+    </state>
+    <state width="1878" height="330" key="GridCell.Tab.1.right/0.27.1920.1053@0.27.1920.1053" timestamp="1605877644552" />
+    <state x="825" y="443" width="319" height="265" key="com.intellij.database.actions.DdlActions$DeleteProvider2$1" timestamp="1605889783726">
+      <screen x="0" y="27" width="1920" height="1053" />
+    </state>
+    <state x="825" y="443" width="319" height="265" key="com.intellij.database.actions.DdlActions$DeleteProvider2$1/0.27.1920.1053@0.27.1920.1053" timestamp="1605889783726" />
+    <state x="791" y="255" width="553" height="603" key="com.intellij.database.view.ui.AbstractDbRefactoringDialog" timestamp="1605889130274">
+      <screen x="0" y="27" width="1920" height="1053" />
+    </state>
+    <state x="791" y="255" width="553" height="603" key="com.intellij.database.view.ui.AbstractDbRefactoringDialog/0.27.1920.1053@0.27.1920.1053" timestamp="1605889130274" />
+    <state x="884" y="227" key="com.intellij.tools.ToolSelectDialog.dimensionServiceKey" timestamp="1605865760720">
+      <screen x="0" y="27" width="1920" height="1053" />
+    </state>
+    <state x="884" y="227" key="com.intellij.tools.ToolSelectDialog.dimensionServiceKey/0.27.1920.1053@0.27.1920.1053" timestamp="1605865760720" />
   </component>
 </project>

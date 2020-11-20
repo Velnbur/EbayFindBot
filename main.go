@@ -107,19 +107,18 @@ func getUpdates(url string, u *Update) {
 
 	defer get.Body.Close()
 	if err != nil {
-		fmt.Println("getUpdates problems")
-		return
+		panic(err.Error())
 	}
 
 	body, err := ioutil.ReadAll(get.Body)
 	if err != nil {
-		fmt.Println(err.Error())
+		panic(err.Error())
 	}
 
-	json.Unmarshal(body, &u)
-
-	//fmt.Println("done!")
-	return
+	err = json.Unmarshal(body, &u)
+	if err != nil {
+		panic(err.Error())
+	}
 }
 
 func sendMessage(url, text string, chatID int) {
@@ -133,14 +132,65 @@ func sendMessage(url, text string, chatID int) {
 	defer req.Body.Close()
 
 	if err != nil {
-		fmt.Println(err)
-		return
+		panic(err.Error())
+	}
+}
+
+func sendPost(url, id string, chatID int) {
+	db, err := sql.Open("sqlite3", "main_db.sqlite3")
+	if err != nil {
+		panic(err.Error())
+	}
+	defer db.Close()
+
+	ctx, cancelfunc := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelfunc()
+
+	rows, err := db.QueryContext(ctx, "SELECT * FROM products WHERE id=($1)", id)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer rows.Close()
+
+	var name string
+	var price string
+	var imageUrl string
+	var isSent int
+	var productUrl string
+	var ID int
+
+	if err := rows.Scan(&name, &price, &imageUrl, &isSent, &productUrl, &ID); err != nil {
+		log.Fatal(err)
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Fatal(err)
+	}
+
+	text := fmt.Sprintf("$1 \n $2 \n <a href=\"$3\">link</a>", name, price)
+
+	message, err := json.Marshal(map[string]string{
+		"chat_id":    strconv.Itoa(chatID),
+		"photo":      imageUrl,
+		"parse_mode": "HTML",
+		"caption":    text,
+	})
+
+	if err != nil {
+		panic(err.Error())
+	}
+
+	req, err := http.Post(url+"sendMessage", "application/json", bytes.NewBuffer(message))
+	defer req.Body.Close()
+
+	if err != nil {
+		panic(err.Error())
 	}
 }
 
 func checkInId(id int, list []int) bool {
-	for i := range list {
-		if i == id {
+	for i := 0; i < len(list); i++ {
+		if list[i] == id {
 			return false
 		}
 	}
@@ -165,10 +215,13 @@ func getLatestScrap(sc *scrapResponse) {
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Println(err.Error())
+		panic(err.Error())
 	}
 
-	json.Unmarshal(body, &sc)
+	err = json.Unmarshal(body, &sc)
+	if err != nil {
+		panic(err.Error())
+	}
 }
 
 func getFile(sR *scrapResponse, jr *JsonRequest) {
@@ -192,12 +245,12 @@ func getFile(sR *scrapResponse, jr *JsonRequest) {
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Println(err.Error())
+		panic(err.Error())
 	}
 
 	err = WriteToFile("file.zip", string(body))
 	if err != nil {
-		fmt.Println(err.Error())
+		panic(err.Error())
 	}
 
 	fmt.Println("Scrapping last data...DONE!")
@@ -207,12 +260,12 @@ func getFile(sR *scrapResponse, jr *JsonRequest) {
 
 	err = os.Remove(file)
 	if err != nil {
-		fmt.Println(err.Error())
+		panic(err.Error())
 	}
 
 	err = os.Remove("file.zip")
 	if err != nil {
-		fmt.Println(err.Error())
+		panic(err.Error())
 	}
 }
 
@@ -237,10 +290,12 @@ func UnmarshallJsonFile(filename string, jr *JsonRequest) {
 	defer fmt.Println("done!")
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
-		fmt.Println("File reading error", err)
-		return
+		panic(err.Error())
 	}
-	json.Unmarshal(data, &jr)
+	err = json.Unmarshal(data, &jr)
+	if err != nil {
+		panic(err.Error())
+	}
 }
 
 func Unzip(src string) string {
@@ -265,10 +320,19 @@ func Unzip(src string) string {
 	}
 
 	_, err = io.Copy(outFile, rc)
+	if err != nil {
+		panic(err.Error())
+	}
 
 	// Close the file without defer to close before next iteration of loop
-	outFile.Close()
-	rc.Close()
+	err = outFile.Close()
+	if err != nil {
+		panic(err.Error())
+	}
+	err = rc.Close()
+	if err != nil {
+		panic(err.Error())
+	}
 
 	fmt.Println(" done!")
 	return r.File[0].Name
@@ -335,8 +399,11 @@ func addNewChat(id int) {
 	defer cancelfunc()
 
 	_, err = db.ExecContext(ctx,
-		"INSERT INTO chat (id) VALUES ($1)",
+		"INSERT INTO chats (id) VALUES ($1)",
 		id)
+	if err != nil {
+		panic(err.Error())
+	}
 }
 
 func main() {
@@ -359,10 +426,8 @@ func main() {
 		select {
 		case <-ticker5h.C:
 			getUpdates(url, &upd)
-
 		case <-ticker1d.C:
 			getLatestScrap(&scResp)
-
 			getFile(&scResp, &jsonReq)
 		default:
 			getUpdates(url, &upd)
@@ -370,8 +435,7 @@ func main() {
 			for i := 0; i < len(upd.Result); i++ {
 				chatId := upd.Result[i].Message.Chat.ID
 
-				if upd.Result[i].Message.Text == "/start" && !checkInId(chatId, chatIDs) {
-					fmt.Println(chatIDs, chatId)
+				if upd.Result[i].Message.Text == "/start" && checkInId(chatId, chatIDs) {
 					sendMessage(url, "Okay, lets start", chatId)
 					addNewChat(chatId)
 					chatIDs = append(chatIDs, chatId)
