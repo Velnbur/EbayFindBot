@@ -1,7 +1,6 @@
 package main
 
 import (
-	"archive/zip"
 	"bytes"
 	"context"
 	"database/sql"
@@ -9,29 +8,12 @@ import (
 	"flag"
 	"fmt"
 	_ "github.com/mattn/go-sqlite3"
-	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
-	"os"
 	"strconv"
 	"time"
 )
-
-type JsonRequest struct {
-	Page string `json:"page"`
-	Data []struct {
-		Name []struct {
-			Text string `json:"text"`
-		} `json:"name"`
-		Prices []struct {
-			Text string `json:"text"`
-		} `json:"prices"`
-		URLImage []struct {
-			Img string `json:"img"`
-		} `json:"url_image"`
-	} `json:"data"`
-}
 
 type Message struct {
 	MessageID int `json:"message_id"`
@@ -64,26 +46,6 @@ type Update struct {
 	Ok     bool     `json:"ok"`
 	Result []Result `json:"result"`
 }
-
-type scrapResponse struct {
-	Num0 struct {
-		JobID           string `json:"job_id"`
-		TotalPages      string `json:"total_pages"`
-		TotalSuccess    string `json:"total_success"`
-		TotalFail       string `json:"total_fail"`
-		TotalRows       string `json:"total_rows"`
-		Status          string `json:"status"`
-		StartedAt       string `json:"started_at"`
-		DataDownloadKey string `json:"data_download_key"`
-		CsvAPI          string `json:"csv_api"`
-		JSONAPI         string `json:"json_api"`
-		DataAPI         string `json:"data_api"`
-		EndedAt         string `json:"ended_at"`
-	} `json:"0"`
-}
-
-const scrapToken = "e4aa3204c-6f7c-4a96-893a-9587feab91d3"
-const scrapAPIKey = "3bb96bf16ab908ba9a4b94016ccd0a5616f5f067a21741bf9bb8324b8eabb49bZFkHzJ41uoB7WJwgVLamxvacZlOlUube3Ddn"
 
 func getMe(url string) []byte {
 	resp, err := http.Get(url + "getMe")
@@ -146,20 +108,26 @@ func sendPost(url, id string, chatID int) {
 	ctx, cancelfunc := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelfunc()
 
-	rows, err := db.QueryContext(ctx, "SELECT * FROM products WHERE id=($1)", id)
+	rows, err := db.QueryContext(ctx, "SELECT (name, price, image_url, product_url) FROM products WHERE id=($1)", id)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer rows.Close()
 
+	_, err = db.ExecContext(ctx,
+		"UPDATE products SET is_sent = 1 WHERE id = ($1)", id)
+
+	if err != nil {
+		panic(err.Error())
+	}
+
 	var name string
 	var price string
 	var imageUrl string
-	var isSent int
 	var productUrl string
-	var ID int
 
-	if err := rows.Scan(&name, &price, &imageUrl, &isSent, &productUrl, &ID); err != nil {
+	rows.Next()
+	if err := rows.Scan(&name, &price, &imageUrl, &productUrl); err != nil {
 		log.Fatal(err)
 	}
 
@@ -167,7 +135,7 @@ func sendPost(url, id string, chatID int) {
 		log.Fatal(err)
 	}
 
-	text := fmt.Sprintf("$1 \n $2 \n <a href=\"$3\">link</a>", name, price)
+	text := fmt.Sprintf("%s \n %s \n <a href=\"%s\">link</a>", name, price, productUrl)
 
 	message, err := json.Marshal(map[string]string{
 		"chat_id":    strconv.Itoa(chatID),
@@ -180,7 +148,7 @@ func sendPost(url, id string, chatID int) {
 		panic(err.Error())
 	}
 
-	req, err := http.Post(url+"sendMessage", "application/json", bytes.NewBuffer(message))
+	req, err := http.Post(url+"sendPhoto", "application/json", bytes.NewBuffer(message))
 	defer req.Body.Close()
 
 	if err != nil {
@@ -197,148 +165,7 @@ func checkInId(id int, list []int) bool {
 	return true
 }
 
-func getLatestScrap(sc *scrapResponse) {
-	urlScraper := fmt.Sprintf("https://api.prowebscraper.com/v1/scraper/%s/latest", scrapToken)
-
-	req, err := http.NewRequest("GET", urlScraper, nil)
-	if err != nil {
-		panic(err.Error())
-	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Authorization", scrapAPIKey)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		panic(err.Error())
-	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	err = json.Unmarshal(body, &sc)
-	if err != nil {
-		panic(err.Error())
-	}
-}
-
-func getFile(sR *scrapResponse, jr *JsonRequest) {
-	fmt.Println("Scrapping last data...")
-	jobId := sR.Num0.JobID
-	downloadKey := sR.Num0.DataDownloadKey
-	url := fmt.Sprintf("https://api.prowebscraper.com/v1/download/job-%s/%s/json", jobId, downloadKey)
-
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		panic(err.Error())
-	}
-	req.Header.Set("Accept", "application/x-ndjson")
-	req.Header.Set("Authorization", scrapAPIKey)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		panic(err.Error())
-	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	err = WriteToFile("file.zip", string(body))
-	if err != nil {
-		panic(err.Error())
-	}
-
-	fmt.Println("Scrapping last data...DONE!")
-
-	file := Unzip("file.zip")
-	UnmarshallJsonFile(file, jr)
-
-	err = os.Remove(file)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	err = os.Remove("file.zip")
-	if err != nil {
-		panic(err.Error())
-	}
-}
-
-func WriteToFile(filename string, data string) error {
-	fmt.Print("Writing to the .zip file...")
-	file, err := os.Create(filename)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	_, err = io.WriteString(file, data)
-	if err != nil {
-		return err
-	}
-	fmt.Println("done!")
-	return file.Sync()
-}
-
-func UnmarshallJsonFile(filename string, jr *JsonRequest) {
-	fmt.Print("getting json...")
-	defer fmt.Println("done!")
-	data, err := ioutil.ReadFile(filename)
-	if err != nil {
-		panic(err.Error())
-	}
-	err = json.Unmarshal(data, &jr)
-	if err != nil {
-		panic(err.Error())
-	}
-}
-
-func Unzip(src string) string {
-	fmt.Print("Unzipping...")
-
-	r, err := zip.OpenReader(src)
-	if err != nil {
-		panic(err.Error())
-	}
-	defer r.Close()
-
-	fpath := r.File[0].Name
-
-	outFile, err := os.OpenFile(fpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, r.File[0].Mode())
-	if err != nil {
-		panic(err.Error)
-	}
-
-	rc, err := r.File[0].Open()
-	if err != nil {
-		panic(err.Error())
-	}
-
-	_, err = io.Copy(outFile, rc)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	// Close the file without defer to close before next iteration of loop
-	err = outFile.Close()
-	if err != nil {
-		panic(err.Error())
-	}
-	err = rc.Close()
-	if err != nil {
-		panic(err.Error())
-	}
-
-	fmt.Println(" done!")
-	return r.File[0].Name
-}
-
-func insertData(name, price, imageUrl string) {
+func insertData(name, price, imageUrl, productUrl string) {
 	db, err := sql.Open("sqlite3", "main_db.sqlite3")
 	if err != nil {
 		panic(err.Error())
@@ -349,10 +176,15 @@ func insertData(name, price, imageUrl string) {
 	defer cancelfunc()
 
 	_, err = db.ExecContext(ctx,
-		"INSERT INTO products (name, price, image_url) VALUES ($1, $2, $3)",
+		"INSERT INTO products (name, price, image_url, product_url) VALUES ($1, $2, $3, $4)",
 		name,
 		price,
-		imageUrl)
+		imageUrl,
+		productUrl)
+
+	if err != nil {
+		panic(err.Error())
+	}
 }
 
 func getChats(chatIDs []int) []int {
@@ -417,18 +249,16 @@ func main() {
 	ticker5h := time.NewTicker(5 * time.Hour)
 	ticker1d := time.NewTicker(24 * time.Hour)
 	upd := Update{}
-	scResp := scrapResponse{}
-	jsonReq := JsonRequest{}
 	var chatIDs []int
 	chatIDs = getChats(chatIDs)
+	sendPost(url, "0", 552292720)
 
 	for {
 		select {
 		case <-ticker5h.C:
 			getUpdates(url, &upd)
 		case <-ticker1d.C:
-			getLatestScrap(&scResp)
-			getFile(&scResp, &jsonReq)
+			fmt.Println("Hello")
 		default:
 			getUpdates(url, &upd)
 
