@@ -9,11 +9,12 @@ import (
 	"fmt"
 	_ "github.com/mattn/go-sqlite3"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"strconv"
 	"time"
 )
+
+const telegramUrl = "https://api.telegram.org/bot%s/"
 
 type Message struct {
 	MessageID int `json:"message_id"`
@@ -47,7 +48,7 @@ type Update struct {
 	Result []Result `json:"result"`
 }
 
-func getMe(url string) []byte {
+func (u Update) getMe(url string) []byte {
 	resp, err := http.Get(url + "getMe")
 	defer resp.Body.Close()
 
@@ -63,7 +64,7 @@ func getMe(url string) []byte {
 	return body
 }
 
-func getUpdates(url string, u *Update) {
+func (u Update) getUpdates(url string) {
 	//fmt.Print("Getting new messages...")
 	get, err := http.Get(url + "getUpdates")
 
@@ -83,7 +84,7 @@ func getUpdates(url string, u *Update) {
 	}
 }
 
-func sendMessage(url, text string, chatID int) {
+func (u Update) sendMessage(url, text string, chatID int) {
 	message, err := json.Marshal(map[string]string{
 		"chat_id": strconv.Itoa(chatID),
 		"text":    text,
@@ -98,7 +99,37 @@ func sendMessage(url, text string, chatID int) {
 	}
 }
 
-func sendPost(url, id string, chatID int) {
+func (u Update) sendPost(url string, productID int, chats []int) {
+
+	name, price, imageUrl, productUrl, err := getData(productID)
+
+	if err != nil {
+		panic(err.Error())
+	}
+
+	for i := 0; i < len(chats); i++ {
+
+		text := fmt.Sprintf("%s \n %s \n <a href=\"%s\">link</a>", name, price, productUrl)
+
+		message, err := json.Marshal(map[string]string{
+			"chat_id":    strconv.Itoa(chats[i]),
+			"photo":      imageUrl,
+			"parse_mode": "HTML",
+			"caption":    text,
+		})
+
+		if err != nil {
+			panic(err.Error())
+		}
+
+		req, err := http.Post(url+"sendPhoto", "application/json", bytes.NewBuffer(message))
+		if err = req.Body.Close(); err != nil {
+			panic(err.Error())
+		}
+	}
+}
+
+func (u Update) getChats(chatIDs *[]int) {
 	db, err := sql.Open("sqlite3", "main_db.sqlite3")
 	if err != nil {
 		panic(err.Error())
@@ -108,50 +139,23 @@ func sendPost(url, id string, chatID int) {
 	ctx, cancelfunc := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelfunc()
 
-	rows, err := db.QueryContext(ctx, "SELECT (name, price, image_url, product_url) FROM products WHERE id=($1)", id)
+	rows, err := db.QueryContext(ctx, "SELECT id FROM chats")
 	if err != nil {
-		log.Fatal(err)
+		panic(err.Error())
 	}
 	defer rows.Close()
 
-	_, err = db.ExecContext(ctx,
-		"UPDATE products SET is_sent = 1 WHERE id = ($1)", id)
-
-	if err != nil {
-		panic(err.Error())
-	}
-
-	var name string
-	var price string
-	var imageUrl string
-	var productUrl string
-
-	rows.Next()
-	if err := rows.Scan(&name, &price, &imageUrl, &productUrl); err != nil {
-		log.Fatal(err)
+	for rows.Next() {
+		var id int
+		if err := rows.Scan(&id); err != nil {
+			panic(err.Error())
+		}
+		if checkInId(id, *chatIDs) {
+			*chatIDs = append(*chatIDs, id)
+		}
 	}
 
 	if err := rows.Err(); err != nil {
-		log.Fatal(err)
-	}
-
-	text := fmt.Sprintf("%s \n %s \n <a href=\"%s\">link</a>", name, price, productUrl)
-
-	message, err := json.Marshal(map[string]string{
-		"chat_id":    strconv.Itoa(chatID),
-		"photo":      imageUrl,
-		"parse_mode": "HTML",
-		"caption":    text,
-	})
-
-	if err != nil {
-		panic(err.Error())
-	}
-
-	req, err := http.Post(url+"sendPhoto", "application/json", bytes.NewBuffer(message))
-	defer req.Body.Close()
-
-	if err != nil {
 		panic(err.Error())
 	}
 }
@@ -165,6 +169,7 @@ func checkInId(id int, list []int) bool {
 	return true
 }
 
+/*
 func insertData(name, price, imageUrl, productUrl string) {
 	db, err := sql.Open("sqlite3", "main_db.sqlite3")
 	if err != nil {
@@ -186,38 +191,45 @@ func insertData(name, price, imageUrl, productUrl string) {
 		panic(err.Error())
 	}
 }
+*/
+func getData(productID int) (string, string, string, string, error) {
+	var name string
+	var price string
+	var imageUrl string
+	var productUrl string
 
-func getChats(chatIDs []int) []int {
 	db, err := sql.Open("sqlite3", "main_db.sqlite3")
 	if err != nil {
-		panic(err.Error())
+		return name, price, imageUrl, productUrl, err
 	}
 	defer db.Close()
 
 	ctx, cancelfunc := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelfunc()
 
-	rows, err := db.QueryContext(ctx, "SELECT id FROM chats")
+	rows, err := db.QueryContext(ctx,
+		"SELECT name, price, image_url, product_url FROM products WHERE id = ($0)",
+		productID)
 	if err != nil {
-		log.Fatal(err)
+		return "Hello1", price, imageUrl, productUrl, err
 	}
 	defer rows.Close()
 
-	for rows.Next() {
-		var id int
-		if err := rows.Scan(&id); err != nil {
-			log.Fatal(err)
-		}
-		if checkInId(id, chatIDs) {
-			chatIDs = append(chatIDs, id)
-		}
+	_, err = db.ExecContext(ctx, "UPDATE products SET is_sent = 0 WHERE id = ($1)", productID)
+
+	if err != nil {
+		return name, price, imageUrl, productUrl, err
+	}
+	rows.Next()
+	if err = rows.Scan(&name, &price, &imageUrl, &productUrl); err != nil {
+		return "", "", "", "", err
 	}
 
-	if err := rows.Err(); err != nil {
-		log.Fatal(err)
+	if err = rows.Err(); err != nil {
+		return name, price, imageUrl, productUrl, err
 	}
 
-	return chatIDs
+	return name, price, imageUrl, productUrl, nil
 }
 
 func addNewChat(id int) {
@@ -244,29 +256,29 @@ func main() {
 	token := flag.String("token", "", "Telegram token value")
 	flag.Parse()
 
-	url := fmt.Sprintf("https://api.telegram.org/bot%s/", *token)
+	url := fmt.Sprintf(telegramUrl, *token)
 
 	ticker5h := time.NewTicker(5 * time.Hour)
 	ticker1d := time.NewTicker(24 * time.Hour)
 	upd := Update{}
 	var chatIDs []int
-	chatIDs = getChats(chatIDs)
-	sendPost(url, "0", 552292720)
+	upd.getChats(&chatIDs)
+	upd.sendPost(url, 0, chatIDs)
 
 	for {
 		select {
 		case <-ticker5h.C:
-			getUpdates(url, &upd)
+			upd.getUpdates(url)
 		case <-ticker1d.C:
 			fmt.Println("Hello")
 		default:
-			getUpdates(url, &upd)
+			upd.getUpdates(url)
 
 			for i := 0; i < len(upd.Result); i++ {
 				chatId := upd.Result[i].Message.Chat.ID
 
 				if upd.Result[i].Message.Text == "/start" && checkInId(chatId, chatIDs) {
-					sendMessage(url, "Okay, lets start", chatId)
+					upd.sendMessage(url, "Okay, lets start", chatId)
 					addNewChat(chatId)
 					chatIDs = append(chatIDs, chatId)
 				}
