@@ -56,7 +56,7 @@ func TestGetUpdates(t *testing.T) {
 }
 
 func TestGetData(t *testing.T) {
-	_, _, _, _, err := getData(0)
+	_, _, _, _, err := getData(1)
 	if err != nil {
 		t.Error(err.Error())
 	}

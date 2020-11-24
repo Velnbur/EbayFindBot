@@ -15,6 +15,61 @@ import (
 )
 
 const telegramUrl = "https://api.telegram.org/bot%s/"
+const EbayUrl = "https://svcs.ebay.com/services/search/FindingService/v1?" +
+	"OPERATION-NAME=findItemsByKeywords&" +
+	"SERVICE-VERSION=1.0.0&" +
+	"SECURITY-APPNAME=%s&" +
+	"outputSelector=PictureURLSuperSize&" +
+	"paginationInput.entriesPerPage=7" +
+	"RESPONSE-DATA-FORMAT=JSON&" +
+	"REST-PAYLOAD&keywords=guitar&"
+
+type EbayResult struct {
+	ByKeywordsResponse []struct {
+		Ack          []string    `json:"ack"`
+		Version      []string    `json:"version"`
+		Timestamp    []time.Time `json:"timestamp"`
+		SearchResult []struct {
+			Count string `json:"@count"`
+			Item  []struct {
+				ItemID          []string `json:"itemId"`
+				Title           []string `json:"title"`
+				GlobalID        []string `json:"globalId"`
+				PrimaryCategory []struct {
+					CategoryID   []string `json:"categoryId"`
+					CategoryName []string `json:"categoryName"`
+				} `json:"primaryCategory"`
+				GalleryURL    []string `json:"galleryURL"`
+				ViewItemURL   []string `json:"viewItemURL"`
+				SellingStatus []struct {
+					CurrentPrice []struct {
+						CurrencyID string `json:"@currencyId"`
+						Value      string `json:"__value__"`
+					} `json:"currentPrice"`
+					ConvertedCurrentPrice []struct {
+						CurrencyID string `json:"@currencyId"`
+						Value      string `json:"__value__"`
+					} `json:"convertedCurrentPrice"`
+				} `json:"sellingStatus"`
+				ListingInfo []struct {
+					WatchCount []string `json:"watchCount"`
+				} `json:"listingInfo"`
+				ProductID []struct {
+					Type  string `json:"@type"`
+					Value string `json:"__value__"`
+				} `json:"productId,omitempty"`
+				PictureUrlSuperSize []string `json:"pictureURLSuperSize,omitempty"`
+			} `json:"item"`
+		} `json:"searchResult"`
+		PaginationOutput []struct {
+			PageNumber     []string `json:"pageNumber"`
+			EntriesPerPage []string `json:"entriesPerPage"`
+			TotalPages     []string `json:"totalPages"`
+			TotalEntries   []string `json:"totalEntries"`
+		} `json:"paginationOutput"`
+		ItemSearchURL []string `json:"itemSearchURL"`
+	} `json:"findItemsByKeywordsResponse"`
+}
 
 type Message struct {
 	MessageID int `json:"message_id"`
@@ -33,9 +88,8 @@ type Message struct {
 		Username  string `json:"username"`
 		Type      string `json:"type"`
 	} `json:"chat"`
-	Date       int    `json:"date"`
-	Text       string `json:"text"`
-	isAnswered bool
+	Date int    `json:"date"`
+	Text string `json:"text"`
 }
 
 type Result struct {
@@ -109,7 +163,7 @@ func (u Update) sendPost(url string, productID int, chats []int) {
 
 	for i := 0; i < len(chats); i++ {
 
-		text := fmt.Sprintf("%s \n %s \n <a href=\"%s\">link</a>", name, price, productUrl)
+		text := fmt.Sprintf("%s \n US $%s \n <a href=\"%s\">link</a>", name, price, productUrl)
 
 		message, err := json.Marshal(map[string]string{
 			"chat_id":    strconv.Itoa(chats[i]),
@@ -169,7 +223,6 @@ func checkInId(id int, list []int) bool {
 	return true
 }
 
-/*
 func insertData(name, price, imageUrl, productUrl string) {
 	db, err := sql.Open("sqlite3", "main_db.sqlite3")
 	if err != nil {
@@ -191,7 +244,7 @@ func insertData(name, price, imageUrl, productUrl string) {
 		panic(err.Error())
 	}
 }
-*/
+
 func getData(productID int) (string, string, string, string, error) {
 	var name string
 	var price string
@@ -215,7 +268,7 @@ func getData(productID int) (string, string, string, string, error) {
 	}
 	defer rows.Close()
 
-	_, err = db.ExecContext(ctx, "UPDATE products SET is_sent = 0 WHERE id = ($1)", productID)
+	_, err = db.ExecContext(ctx, "UPDATE products SET is_sent = 1 WHERE id = ($1)", productID)
 
 	if err != nil {
 		return name, price, imageUrl, productUrl, err
@@ -250,35 +303,74 @@ func addNewChat(id int) {
 	}
 }
 
+func getEbayJson(key string, eb *EbayResult) {
+	url := fmt.Sprintf(EbayUrl, key)
+	get, err := http.Get(url)
+
+	defer get.Body.Close()
+	if err != nil {
+		panic(err.Error())
+	}
+
+	body, err := ioutil.ReadAll(get.Body)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	err = json.Unmarshal(body, &eb)
+	if err != nil {
+		panic(err.Error())
+	}
+}
+
 func main() {
 	fmt.Println("Starting...")
 
-	token := flag.String("token", "", "Telegram token value")
+	telegramToken := flag.String("TelToken", "", "Telegram token value")
+	EbayAppKey := flag.String("AppKey", "", "Ebay abb key")
 	flag.Parse()
 
-	url := fmt.Sprintf(telegramUrl, *token)
+	botUrl := fmt.Sprintf(telegramUrl, *telegramToken)
 
-	ticker5h := time.NewTicker(5 * time.Hour)
-	ticker1d := time.NewTicker(24 * time.Hour)
+	var lastSendID int
+	lastSendID = 1
+
+	ticker1h := time.NewTicker(1 * time.Hour)
+	ticker4d := time.NewTicker(6 * time.Hour)
 	upd := Update{}
+	ebr := EbayResult{}
 	var chatIDs []int
 	upd.getChats(&chatIDs)
-	upd.sendPost(url, 0, chatIDs)
 
 	for {
 		select {
-		case <-ticker5h.C:
-			upd.getUpdates(url)
-		case <-ticker1d.C:
-			fmt.Println("Hello")
+		case <-ticker1h.C:
+			upd.sendPost(botUrl, lastSendID, chatIDs)
+			fmt.Println("Send id = ", lastSendID)
+			lastSendID += 1
+
+		case <-ticker4d.C:
+			getEbayJson(*EbayAppKey, &ebr)
+			count, err := strconv.Atoi(ebr.ByKeywordsResponse[0].SearchResult[0].Count)
+			if err != nil {
+				panic(err.Error())
+			}
+			for j := 0; j < count; j++ {
+				insertData(ebr.ByKeywordsResponse[0].SearchResult[0].Item[j].Title[0],
+					ebr.ByKeywordsResponse[0].SearchResult[0].Item[j].SellingStatus[0].CurrentPrice[0].Value,
+					ebr.ByKeywordsResponse[0].SearchResult[0].Item[j].PictureUrlSuperSize[0],
+					ebr.ByKeywordsResponse[0].SearchResult[0].Item[j].ViewItemURL[0])
+			}
+			fmt.Println("Added ", count, " new products")
+
 		default:
-			upd.getUpdates(url)
+			upd.getUpdates(botUrl)
 
 			for i := 0; i < len(upd.Result); i++ {
 				chatId := upd.Result[i].Message.Chat.ID
 
 				if upd.Result[i].Message.Text == "/start" && checkInId(chatId, chatIDs) {
-					upd.sendMessage(url, "Okay, lets start", chatId)
+					upd.sendMessage(botUrl, "This chat was aded to the list", chatId)
 					addNewChat(chatId)
 					chatIDs = append(chatIDs, chatId)
 				}
