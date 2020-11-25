@@ -20,9 +20,10 @@ const EbayUrl = "https://svcs.ebay.com/services/search/FindingService/v1?" +
 	"SERVICE-VERSION=1.0.0&" +
 	"SECURITY-APPNAME=%s&" +
 	"outputSelector=PictureURLSuperSize&" +
-	"paginationInput.entriesPerPage=7" +
+	"paginationInput.entriesPerPage=1&" +
 	"RESPONSE-DATA-FORMAT=JSON&" +
-	"REST-PAYLOAD&keywords=guitar&"
+	"REST-PAYLOAD&" +
+	"keywords=guitar&"
 
 type EbayResult struct {
 	ByKeywordsResponse []struct {
@@ -153,12 +154,11 @@ func (u Update) sendMessage(url, text string, chatID int) {
 	}
 }
 
-func (u Update) sendPost(url string, productID int, chats []int) {
+func sendPost(url string, productID int, chats []int) error {
 
 	name, price, imageUrl, productUrl, err := getData(productID)
-
 	if err != nil {
-		panic(err.Error())
+		return err
 	}
 
 	for i := 0; i < len(chats); i++ {
@@ -173,14 +173,16 @@ func (u Update) sendPost(url string, productID int, chats []int) {
 		})
 
 		if err != nil {
-			panic(err.Error())
+			return err
 		}
 
 		req, err := http.Post(url+"sendPhoto", "application/json", bytes.NewBuffer(message))
 		if err = req.Body.Close(); err != nil {
-			panic(err.Error())
+			return err
 		}
 	}
+
+	return nil
 }
 
 func (u Update) getChats(chatIDs *[]int) {
@@ -318,8 +320,36 @@ func getEbayJson(key string, eb *EbayResult) {
 	}
 
 	err = json.Unmarshal(body, &eb)
+
 	if err != nil {
 		panic(err.Error())
+	}
+}
+
+func getLastId(num *int) {
+	var id int
+
+	db, err := sql.Open("sqlite3", "main_db.sqlite3")
+	if err != nil {
+		panic(err.Error())
+	}
+	defer db.Close()
+
+	ctx, cancelfunc := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelfunc()
+
+	rows, err := db.QueryContext(ctx,
+		"SELECT id FROM products WHERE is_sent = 1",
+		num)
+	defer rows.Close()
+
+	for rows.Next() {
+		if err := rows.Scan(&id); err != nil {
+			panic(err.Error())
+		}
+		if id > *num {
+			*num = id
+		}
 	}
 }
 
@@ -332,11 +362,18 @@ func main() {
 
 	botUrl := fmt.Sprintf(telegramUrl, *telegramToken)
 
-	var lastSendID int
-	lastSendID = 1
+	lastSendID := 0
+	getLastId(&lastSendID)
+	lastSendID += 1
 
-	ticker1h := time.NewTicker(1 * time.Hour)
-	ticker4d := time.NewTicker(6 * time.Hour)
+	//ticker1h := time.NewTicker(1 * time.Hour)
+	//time.Sleep(1 * time.Minute
+	//ticker4d := time.NewTicker(6 * time.Hour)
+
+	ticker1h := time.NewTicker(10 * time.Second)
+	time.Sleep(10 * time.Second)
+	ticker4d := time.NewTicker(10 * time.Second)
+
 	upd := Update{}
 	ebr := EbayResult{}
 	var chatIDs []int
@@ -345,23 +382,25 @@ func main() {
 	for {
 		select {
 		case <-ticker1h.C:
-			upd.sendPost(botUrl, lastSendID, chatIDs)
-			fmt.Println("Send id = ", lastSendID)
-			lastSendID += 1
-
-		case <-ticker4d.C:
-			getEbayJson(*EbayAppKey, &ebr)
-			count, err := strconv.Atoi(ebr.ByKeywordsResponse[0].SearchResult[0].Count)
+			fmt.Print("Sending post id = ", lastSendID, " ... ")
+			err := sendPost(botUrl, lastSendID, chatIDs)
 			if err != nil {
 				panic(err.Error())
+			} else if err.Error() == "sql: Rows are closed" {
+				fmt.Println("failed")
+			} else {
+				lastSendID += 1
+				fmt.Println("done!")
 			}
-			for j := 0; j < count; j++ {
-				insertData(ebr.ByKeywordsResponse[0].SearchResult[0].Item[j].Title[0],
-					ebr.ByKeywordsResponse[0].SearchResult[0].Item[j].SellingStatus[0].CurrentPrice[0].Value,
-					ebr.ByKeywordsResponse[0].SearchResult[0].Item[j].PictureUrlSuperSize[0],
-					ebr.ByKeywordsResponse[0].SearchResult[0].Item[j].ViewItemURL[0])
-			}
-			fmt.Println("Added ", count, " new products")
+
+		case <-ticker4d.C:
+			fmt.Print("Getting new data...")
+			getEbayJson(*EbayAppKey, &ebr)
+			insertData(ebr.ByKeywordsResponse[0].SearchResult[0].Item[0].Title[0],
+				ebr.ByKeywordsResponse[0].SearchResult[0].Item[0].SellingStatus[0].CurrentPrice[0].Value,
+				ebr.ByKeywordsResponse[0].SearchResult[0].Item[0].PictureUrlSuperSize[0],
+				ebr.ByKeywordsResponse[0].SearchResult[0].Item[0].ViewItemURL[0])
+			fmt.Println("done!")
 
 		default:
 			upd.getUpdates(botUrl)
@@ -373,6 +412,7 @@ func main() {
 					upd.sendMessage(botUrl, "This chat was aded to the list", chatId)
 					addNewChat(chatId)
 					chatIDs = append(chatIDs, chatId)
+					fmt.Println("Somebody added bot to new chat! Great!")
 				}
 			}
 		}
