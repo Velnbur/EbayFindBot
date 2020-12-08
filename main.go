@@ -194,7 +194,7 @@ func sendPost(url string, productID int, chats []int) error {
 }
 
 func (u Update) getChats(chatIDs *[]int) {
-	db, err := sql.Open("sqlite3", "main_db.sqlite3")
+	db, err := sql.Open("sqlite3", "db/main_db.sqlite3")
 	if err != nil {
 		panic(err.Error())
 	}
@@ -234,7 +234,7 @@ func checkInId(id int, list []int) bool {
 }
 
 func insertData(name, price, imageUrl, productUrl string) {
-	db, err := sql.Open("sqlite3", "main_db.sqlite3")
+	db, err := sql.Open("sqlite3", "db/main_db.sqlite3")
 	if err != nil {
 		panic(err.Error())
 	}
@@ -262,7 +262,7 @@ func getData(productID int) (string, string, string, string, error) {
 	var imageUrl string
 	var productUrl string
 
-	db, err := sql.Open("sqlite3", "main_db.sqlite3")
+	db, err := sql.Open("sqlite3", "db/main_db.sqlite3")
 	if err != nil {
 		return name, price, imageUrl, productUrl, err
 	}
@@ -300,7 +300,7 @@ func getData(productID int) (string, string, string, string, error) {
 }
 
 func addNewChat(id int) {
-	db, err := sql.Open("sqlite3", "main_db.sqlite3")
+	db, err := sql.Open("sqlite3", "db/main_db.sqlite3")
 	if err != nil {
 		panic(err.Error())
 	}
@@ -341,7 +341,7 @@ func getEbayJson(key string, eb *EbayResult, page int) {
 func getLastId(num *int) error {
 	var id int
 
-	db, err := sql.Open("sqlite3", "main_db.sqlite3")
+	db, err := sql.Open("sqlite3", "db/main_db.sqlite3")
 	if err != nil {
 		return err
 	}
