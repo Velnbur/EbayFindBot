@@ -55,8 +55,21 @@ func TestGetUpdates(t *testing.T) {
 	}
 }
 
+func TestGetLastId(t *testing.T) {
+	var id int
+	err := getLastId(&id)
+
+	if err != nil {
+		t.Error(err.Error())
+	}
+}
+
 func TestGetData(t *testing.T) {
-	_, _, _, _, err := getData(1)
+	var id int
+	err := getLastId(&id)
+
+	print(id)
+	_, _, _, _,	 err = getData(id)
 	if err != nil {
 		t.Error(err.Error())
 	}
