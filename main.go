@@ -366,13 +366,13 @@ func main() {
 	getLastId(&lastSendID)
 	lastSendID += 1
 
-	//ticker1h := time.NewTicker(1 * time.Hour)
+	//tickerParse := time.NewTicker(1 * time.Hour)
 	//time.Sleep(1 * time.Minute
-	//ticker4d := time.NewTicker(6 * time.Hour)
+	//tickerSend := time.NewTicker(1 * time.Hour)
 
-	ticker1h := time.NewTicker(10 * time.Second)
+	tickerParse := time.NewTicker(10 * time.Second)
 	time.Sleep(10 * time.Second)
-	ticker4d := time.NewTicker(10 * time.Second)
+	tickerSend := time.NewTicker(10 * time.Second)
 
 	upd := Update{}
 	ebr := EbayResult{}
