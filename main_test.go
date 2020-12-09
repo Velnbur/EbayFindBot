@@ -4,6 +4,8 @@ import (
 	"testing"
 )
 
+const testChatID = 16032003
+
 func TestCheckInId(t *testing.T) {
 	t.Parallel()
 
@@ -11,13 +13,13 @@ func TestCheckInId(t *testing.T) {
 	var result bool
 
 	result = checkInId(5, list)
-	if result != true {
+	if !result {
 		t.Errorf("5 not in %v", list)
 	}
 
 	list = []int{2, 3, 1, 5, 4}
 	result = checkInId(4, list)
-	if result != false {
+	if result {
 		t.Errorf("4 in %v", list)
 	}
 
@@ -26,7 +28,7 @@ func TestCheckInId(t *testing.T) {
 		list = append(list, i)
 	}
 	result = checkInId(567, list)
-	if result != false {
+	if result {
 		t.Errorf("567 in [0...1000]")
 	}
 }
@@ -35,11 +37,37 @@ func TestGetChats(t *testing.T) {
 	t.Parallel()
 	var chats []int
 
-	var u = Update{}
-
-	u.getChats(&chats)
+	getChats(&chats)
 	if len(chats) < 1 {
-		t.Error("The chats is empty")
+		t.Error("The chats are empty")
+	}
+}
+
+func TestAddChat(t *testing.T) {
+	err := addNewChat(testChatID)
+	if err != nil {
+		t.Error()
+	}
+
+	var chats []int
+
+	getChats(&chats)
+	if checkInId(testChatID, chats) {
+		t.Error("There's no added chat in db")
+	}
+}
+
+func TestRemoveChat(t *testing.T) {
+	err := removeChat(testChatID)
+	if err != nil {
+		t.Error()
+	}
+
+	var chats []int
+
+	getChats(&chats)
+	if !checkInId(testChatID, chats) {
+		t.Error("Chat wasn't added to the th db :(")
 	}
 }
 

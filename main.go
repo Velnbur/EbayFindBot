@@ -25,6 +25,8 @@ const EbayUrl = "https://svcs.ebay.com/services/search/FindingService/v1?" +
 	"RESPONSE-DATA-FORMAT=JSON&" +
 	"REST-PAYLOAD&" +
 	"keywords=guitar&"
+const dbPath = "db/main_db.sqlite3"
+
 
 type EbayResult struct {
 	ByKeywordsResponse []struct {
@@ -193,8 +195,8 @@ func sendPost(url string, productID int, chats []int) error {
 	return nil
 }
 
-func (u Update) getChats(chatIDs *[]int) {
-	db, err := sql.Open("sqlite3", "db/main_db.sqlite3")
+func getChats(chatIDs *[]int) {
+	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		panic(err.Error())
 	}
@@ -233,8 +235,17 @@ func checkInId(id int, list []int) bool {
 	return true
 }
 
+func removeSlice(s []int,  num int) []int {
+	for i := 0; i < len(s); i++ {
+		if s[i] == num {
+			return append(s[:i], s[i+1:]...)
+		}
+	}
+	return s
+}
+
 func insertData(name, price, imageUrl, productUrl string) {
-	db, err := sql.Open("sqlite3", "db/main_db.sqlite3")
+	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		panic(err.Error())
 	}
@@ -262,7 +273,7 @@ func getData(productID int) (string, string, string, string, error) {
 	var imageUrl string
 	var productUrl string
 
-	db, err := sql.Open("sqlite3", "db/main_db.sqlite3")
+	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return name, price, imageUrl, productUrl, err
 	}
@@ -274,7 +285,7 @@ func getData(productID int) (string, string, string, string, error) {
 	rows, err := db.QueryContext(ctx,
 		"SELECT name, price, image_url, product_url " +
 			"FROM products WHERE id = ($0)",
-		productID):w
+		productID)
 	if err != nil {
 		return name, price, imageUrl, productUrl, err
 	}
@@ -299,10 +310,10 @@ func getData(productID int) (string, string, string, string, error) {
 	return name, price, imageUrl, productUrl, nil
 }
 
-func addNewChat(id int) {
-	db, err := sql.Open("sqlite3", "db/main_db.sqlite3")
+func addNewChat(id int) error {
+	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
-		panic(err.Error())
+		return err
 	}
 	defer db.Close()
 
@@ -313,8 +324,30 @@ func addNewChat(id int) {
 		"INSERT INTO chats (id) VALUES ($1)",
 		id)
 	if err != nil {
-		panic(err.Error())
+		return err
 	}
+
+	return nil
+}
+
+func removeChat(id int) error {
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	ctx, cancelfunc := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelfunc()
+
+	_, err = db.ExecContext(ctx,
+		"DELETE FROM chats WHERE id = ($1)",
+		id)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func getEbayJson(key string, eb *EbayResult, page int) {
@@ -341,7 +374,7 @@ func getEbayJson(key string, eb *EbayResult, page int) {
 func getLastId(num *int) error {
 	var id int
 
-	db, err := sql.Open("sqlite3", "db/main_db.sqlite3")
+	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return err
 	}
@@ -369,12 +402,16 @@ func getLastId(num *int) error {
 
 func main() {
 	var chatIDs []int
+	var chatId int
+	var messageText string
+	var ansMessages []int
+	var messageID int
 	pageNum := 1
 	lastSendID := 0
 	upd := Update{}
 	ebr := EbayResult{}
 
-	upd.getChats(&chatIDs)
+	getChats(&chatIDs)
 
 	fmt.Println("Starting...")
 
@@ -426,15 +463,24 @@ func main() {
 			upd.getUpdates(botUrl)
 
 			for i := 0; i < len(upd.Result); i++ {
-				chatId := upd.Result[i].Message.Chat.ID
+				chatId = upd.Result[i].Message.Chat.ID
+				messageText = upd.Result[i].Message.Text
+				messageID = upd.Result[i].Message.MessageID
 
-				if upd.Result[i].Message.Text == "/start" &&
-					checkInId(chatId, chatIDs) {
-
-					upd.sendMessage(botUrl, "This chat was aded to the list", chatId)
-					addNewChat(chatId)
-					chatIDs = append(chatIDs, chatId)
-					fmt.Println("Somebody added bot to new chat! Great!")
+				if checkInId(messageID, ansMessages) {
+					if messageText == "/start" && checkInId(chatId, chatIDs) {
+						upd.sendMessage(botUrl, "This chat was added to the sent list", chatId)
+						addNewChat(chatId)
+						chatIDs = append(chatIDs, chatId)
+						fmt.Println("Somebody added bot to new chat! Great!")
+						ansMessages = append(ansMessages, messageID)
+					} else if messageText == "/quit" {
+						upd.sendMessage(botUrl, "This chat was deleted from send list", chatId)
+						removeChat(chatId)
+						chatIDs = removeSlice(chatIDs, chatId)
+						fmt.Println("Chat ", chatId, " was deleted from the list")
+						ansMessages = append(ansMessages, messageID)
+					}
 				}
 			}
 		}
