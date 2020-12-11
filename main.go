@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"bytes"
 	"context"
 	"database/sql"
@@ -432,6 +433,8 @@ func main() {
 	ebr := EbayResult{}
 
 	getChats(&chatIDs)
+
+	_, ok := os.Getenv("PORT")
 
 	fmt.Println("Starting...")
 
