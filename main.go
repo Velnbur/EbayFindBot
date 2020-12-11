@@ -434,7 +434,8 @@ func main() {
 
 	getChats(&chatIDs)
 
-	_, ok := os.Getenv("PORT")
+	ok := os.Getenv("PORT")
+	fmt.Println(ok)
 
 	fmt.Println("Starting...")
 
