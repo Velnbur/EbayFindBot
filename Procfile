@@ -1,1 +1,1 @@
-web: bin/EbayTeleBot
+worker: bin/EbayTeleBot
