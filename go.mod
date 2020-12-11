@@ -1,4 +1,4 @@
-module EbayTeleBot
+module github.com/Velnbur/EbayTeleBot
 
 go 1.15
 
