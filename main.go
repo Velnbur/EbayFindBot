@@ -481,9 +481,6 @@ func main() {
 
 
 		default:
-
-			ok := os.Getenv("PORT")
-			fmt.Println(ok)
 			upd.getUpdates(botUrl)
 
 			for i := 0; i < len(upd.Result); i++ {
