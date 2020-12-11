@@ -78,32 +78,43 @@ type EbayResult struct {
 type Message struct {
 	MessageID int `json:"message_id"`
 	From      struct {
-		ID           int    `json:"id"`
-		IsBot        bool   `json:"is_bot"`
-		FirstName    string `json:"first_name"`
-		LastName     string `json:"last_name"`
-		Username     string `json:"username"`
-		LanguageCode string `json:"language_code"`
+		ID    int  `json:"id"`
+		IsBot bool `json:"is_bot"`
 	} `json:"from"`
 	Chat struct {
-		ID        int    `json:"id"`
-		FirstName string `json:"first_name"`
-		LastName  string `json:"last_name"`
-		Username  string `json:"username"`
-		Type      string `json:"type"`
+		ID int `json:"id"`
 	} `json:"chat"`
 	Date int    `json:"date"`
 	Text string `json:"text"`
 }
 
+type ChannelPost struct {
+	MessageID int `json:"message_id"`
+	From      struct {
+		ID    int  `json:"id"`
+		IsBot bool `json:"is_bot"`
+	} `json:"from"`
+	Chat struct {
+		ID int `json:"id"`
+	} `json:"chat"`
+	Date int    `json:"date"`
+	Text string `json:"text"`
+ }
+
 type Result struct {
-	UpdateID int     `json:"update_id"`
-	Message  Message `json:"message,omitempty"`
+	UpdateID 	int     	`json:"update_id"`
+	Message  	Message 	`json:"message,omitempty"`
+	ChannelPost ChannelPost `json:"channel_post,omitempty"`
 }
 
 type Update struct {
 	Ok     bool     `json:"ok"`
 	Result []Result `json:"result"`
+}
+
+type AnsMessages struct {
+	MessageID int
+	ChatID    int
 }
 
 func (u Update) getMe(url string) []byte {
@@ -229,6 +240,15 @@ func getChats(chatIDs *[]int) {
 func checkInId(id int, list []int) bool {
 	for i := 0; i < len(list); i++ {
 		if list[i] == id {
+			return false
+		}
+	}
+	return true
+}
+
+func checkInMes(message, chat int, answers []AnsMessages) bool {
+	for i := 0; i < len(answers); i ++ {
+		if answers[i].MessageID == message && answers[i].ChatID == chat{
 			return false
 		}
 	}
@@ -404,7 +424,7 @@ func main() {
 	var chatIDs []int
 	var chatId int
 	var messageText string
-	var ansMessages []int
+	var ansMessages []AnsMessages
 	var messageID int
 	pageNum := 1
 	lastSendID := 0
@@ -464,22 +484,29 @@ func main() {
 
 			for i := 0; i < len(upd.Result); i++ {
 				chatId = upd.Result[i].Message.Chat.ID
-				messageText = upd.Result[i].Message.Text
-				messageID = upd.Result[i].Message.MessageID
 
-				if checkInId(messageID, ansMessages) {
+				if chatId == 0 {
+					chatId = upd.Result[i].ChannelPost.Chat.ID
+					messageText = upd.Result[i].ChannelPost.Text
+					messageID = upd.Result[i].ChannelPost.MessageID
+				} else {
+					messageText = upd.Result[i].Message.Text
+					messageID = upd.Result[i].Message.MessageID
+				}
+
+				if checkInMes(messageID, chatId,  ansMessages) {
 					if messageText == "/start" && checkInId(chatId, chatIDs) {
 						upd.sendMessage(botUrl, "This chat was added to the sent list", chatId)
 						addNewChat(chatId)
 						chatIDs = append(chatIDs, chatId)
 						fmt.Println("Somebody added bot to new chat! Great!")
-						ansMessages = append(ansMessages, messageID)
-					} else if messageText == "/quit" {
+						ansMessages = append(ansMessages, AnsMessages{MessageID: messageID, ChatID: chatId})
+					} else if messageText == "/quit" && !checkInId(chatId, chatIDs){
 						upd.sendMessage(botUrl, "This chat was deleted from send list", chatId)
 						removeChat(chatId)
 						chatIDs = removeSlice(chatIDs, chatId)
 						fmt.Println("Chat ", chatId, " was deleted from the list")
-						ansMessages = append(ansMessages, messageID)
+						ansMessages = append(ansMessages, AnsMessages{MessageID: messageID, ChatID: chatId})
 					}
 				}
 			}
