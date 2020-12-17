@@ -2,16 +2,14 @@ package main
 
 import (
 	"bytes"
-	"context"
-	"database/sql"
 	"encoding/json"
 	"flag"
 	"fmt"
-	_ "github.com/mattn/go-sqlite3"
 	"io/ioutil"
 	"net/http"
 	"strconv"
 	"time"
+	"strings"
 )
 
 const telegramUrl = "https://api.telegram.org/bot%s/"
@@ -19,13 +17,10 @@ const EbayUrl = "https://svcs.ebay.com/services/search/FindingService/v1?" +
 	"OPERATION-NAME=findItemsByKeywords&" +
 	"SERVICE-VERSION=1.0.0&" +
 	"SECURITY-APPNAME=%s&" +
-	"outputSelector=PictureURLSuperSize&" +
-	"paginationInput.entriesPerPage=1&" +
-	"paginationInput.pageNumber=%d&" +
+	"paginationInput.entriesPerPage=10&" +
 	"RESPONSE-DATA-FORMAT=JSON&" +
 	"REST-PAYLOAD&" +
-	"keywords=guitar&"
-const dbPath = "db/main_db.sqlite3"
+	"keywords=%s&"
 
 
 type EbayResult struct {
@@ -117,6 +112,12 @@ type AnsMessages struct {
 	ChatID    int
 }
 
+type Product struct {
+	Url   string
+	Name  string
+	Price string
+}
+
 func (u Update) getMe(url string) []byte {
 	resp, err := http.Get(url + "getMe")
 	defer resp.Body.Close()
@@ -170,71 +171,39 @@ func (u Update) sendMessage(url, text string, chatID int) {
 	}
 }
 
-func sendPost(url string, productID int, chats []int) error {
+func sendPost(url string, chatID int, products []Product) error {
+	var messageText string
+	var text string
 
-	name, price, imageUrl, productUrl, err := getData(productID)
+	messageText = "The best products that I found on Ebay: \n"
+
+	for i := 0; i < len(products); i++ {
+		text = fmt.Sprintf("<a href=\"%s\">%s...</a> Price: %s\n",
+			products[i].Url,
+			products[i].Name[:20],
+			products[i].Price)
+
+		messageText += strconv.Itoa(i+1) + ". " + text
+	}
+
+	message, err := json.Marshal(map[string]string{
+		"chat_id":    strconv.Itoa(chatID),
+		"parse_mode": "HTML",
+		"text":    messageText,
+	})
+
 	if err != nil {
 		return err
 	}
 
-	for i := 0; i < len(chats); i++ {
-
-		text := fmt.Sprintf("%s \n US $%s \n <a href=\"%s\">link</a>",
-			name,
-			price,
-			productUrl)
-
-		message, err := json.Marshal(map[string]string{
-			"chat_id":    strconv.Itoa(chats[i]),
-			"photo":      imageUrl,
-			"parse_mode": "HTML",
-			"caption":    text,
-		})
-
-		if err != nil {
-			return err
-		}
-
-		req, err := http.Post(url+"sendPhoto",
-			"application/json",
-			bytes.NewBuffer(message))
-		if err = req.Body.Close(); err != nil {
-			return err
-		}
+	req, err := http.Post(url+"sendMessage",
+		"application/json",
+		bytes.NewBuffer(message))
+	if err = req.Body.Close(); err != nil {
+		return err
 	}
 
 	return nil
-}
-
-func getChats(chatIDs *[]int) {
-	db, err := sql.Open("sqlite3", dbPath)
-	if err != nil {
-		panic(err.Error())
-	}
-	defer db.Close()
-
-	ctx, cancelfunc := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancelfunc()
-
-	rows, err := db.QueryContext(ctx, "SELECT id FROM chats")
-	if err != nil {
-		panic(err.Error())
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var id int
-		if err := rows.Scan(&id); err != nil {
-			panic(err.Error())
-		}
-		if checkInId(id, *chatIDs) {
-			*chatIDs = append(*chatIDs, id)
-		}
-	}
-
-	if err := rows.Err(); err != nil {
-		panic(err.Error())
-	}
 }
 
 func checkInId(id int, list []int) bool {
@@ -264,114 +233,10 @@ func removeSlice(s []int,  num int) []int {
 	return s
 }
 
-func insertData(name, price, imageUrl, productUrl string) {
-	db, err := sql.Open("sqlite3", dbPath)
-	if err != nil {
-		panic(err.Error())
-	}
-	defer db.Close()
 
-	ctx, cancelfunc := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancelfunc()
-
-	_, err = db.ExecContext(ctx,
-		"INSERT INTO products (name, price, image_url, product_url) " +
-			"VALUES ($1, $2, $3, $4)",
-		name,
-		price,
-		imageUrl,
-		productUrl)
-
-	if err != nil {
-		panic(err.Error())
-	}
-}
-
-func getData(productID int) (string, string, string, string, error) {
-	var name string
-	var price string
-	var imageUrl string
-	var productUrl string
-
-	db, err := sql.Open("sqlite3", dbPath)
-	if err != nil {
-		return name, price, imageUrl, productUrl, err
-	}
-	defer db.Close()
-
-	ctx, cancelfunc := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancelfunc()
-
-	rows, err := db.QueryContext(ctx,
-		"SELECT name, price, image_url, product_url " +
-			"FROM products WHERE id = ($0)",
-		productID)
-	if err != nil {
-		return name, price, imageUrl, productUrl, err
-	}
-	defer rows.Close()
-
-	_, err = db.ExecContext(ctx, "UPDATE products SET is_sent = 1 " +
-		"WHERE id = ($1)",
-		productID)
-
-	if err != nil {
-		return name, price, imageUrl, productUrl, err
-	}
-	rows.Next()
-	if err = rows.Scan(&name, &price, &imageUrl, &productUrl); err != nil {
-		return "", "", "", "", err
-	}
-
-	if err = rows.Err(); err != nil {
-		return name, price, imageUrl, productUrl, err
-	}
-
-	return name, price, imageUrl, productUrl, nil
-}
-
-func addNewChat(id int) error {
-	db, err := sql.Open("sqlite3", dbPath)
-	if err != nil {
-		return err
-	}
-	defer db.Close()
-
-	ctx, cancelfunc := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancelfunc()
-
-	_, err = db.ExecContext(ctx,
-		"INSERT INTO chats (id) VALUES ($1)",
-		id)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func removeChat(id int) error {
-	db, err := sql.Open("sqlite3", dbPath)
-	if err != nil {
-		return err
-	}
-	defer db.Close()
-
-	ctx, cancelfunc := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancelfunc()
-
-	_, err = db.ExecContext(ctx,
-		"DELETE FROM chats WHERE id = ($1)",
-		id)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func getEbayJson(key string, eb *EbayResult, page int) {
-	url := fmt.Sprintf(EbayUrl, key, page)
+func getEbayJson(key, keywords string, eb *EbayResult) {
+	url := fmt.Sprintf(EbayUrl, key, keywords)
+	fmt.Println(url)
 	get, err := http.Get(url)
 
 	defer get.Body.Close()
@@ -391,47 +256,23 @@ func getEbayJson(key string, eb *EbayResult, page int) {
 	}
 }
 
-func getLastId(num *int) error {
-	var id int
-
-	db, err := sql.Open("sqlite3", dbPath)
-	if err != nil {
-		return err
-	}
-	defer db.Close()
-
-	ctx, cancelfunc := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancelfunc()
-
-	rows, err := db.QueryContext(ctx,
-		"SELECT id FROM products WHERE is_sent = 1",
-		num)
-	defer rows.Close()
-
-	for rows.Next() {
-		if err := rows.Scan(&id); err != nil {
-			return err
-		}
-		if id > *num {
-			*num = id
-		}
-	}
-
-	return nil
-}
-
 func main() {
 	var chatIDs []int
+	var err error
 	var chatId int
 	var messageText string
 	var ansMessages []AnsMessages
 	var messageID int
-	pageNum := 1
-	lastSendID := 0
+	var productsArray []Product
+
+	var url string
+	var name string
+	var price string
+
+	count := 0
+
 	upd := Update{}
 	ebr := EbayResult{}
-
-	getChats(&chatIDs)
 
 	fmt.Println("Starting...")
 
@@ -445,70 +286,46 @@ func main() {
 
 	botUrl := fmt.Sprintf(telegramUrl, *telegramToken)
 
-	err := getLastId(&lastSendID)
-	if err != nil {
-		panic(err.Error())
-	}
-	lastSendID += 1
-
-	// main tickers
-	tickerParse := time.NewTicker(1 * time.Hour)
-
-	// tickers for testing
-	//tickerParse := time.NewTicker(10 * time.Second)
-
 	for {
-		select {
-		case <-tickerParse.C:
-			fmt.Print("Getting new data...")
-			getEbayJson(*EbayAppKey, &ebr, pageNum)
-			insertData(ebr.ByKeywordsResponse[0].SearchResult[0].Item[0].Title[0],
-				ebr.ByKeywordsResponse[0].SearchResult[0].Item[0].SellingStatus[0].CurrentPrice[0].Value,
-				ebr.ByKeywordsResponse[0].SearchResult[0].Item[0].PictureUrlSuperSize[0],
-				ebr.ByKeywordsResponse[0].SearchResult[0].Item[0].ViewItemURL[0])
-			pageNum += 1
-			fmt.Println("done!")
+		upd.getUpdates(botUrl)
+		for i := 0; i < len(upd.Result); i++ {
+			chatId = upd.Result[i].Message.Chat.ID
 
-			fmt.Print("Sending post id = ", lastSendID, " ... ")
-			err := sendPost(botUrl, lastSendID, chatIDs)
-			if err != nil {
-				panic(err.Error())
+			if chatId == 0 {
+				chatId = upd.Result[i].ChannelPost.Chat.ID
+				messageText = upd.Result[i].ChannelPost.Text
+				messageID = upd.Result[i].ChannelPost.MessageID
 			} else {
-				lastSendID += 1
-				fmt.Println("done!")
+				messageText = upd.Result[i].Message.Text
+				messageID = upd.Result[i].Message.MessageID
 			}
 
-
-		default:
-			upd.getUpdates(botUrl)
-
-			for i := 0; i < len(upd.Result); i++ {
-				chatId = upd.Result[i].Message.Chat.ID
-
-				if chatId == 0 {
-					chatId = upd.Result[i].ChannelPost.Chat.ID
-					messageText = upd.Result[i].ChannelPost.Text
-					messageID = upd.Result[i].ChannelPost.MessageID
-				} else {
-					messageText = upd.Result[i].Message.Text
-					messageID = upd.Result[i].Message.MessageID
-				}
-
-				if checkInMes(messageID, chatId,  ansMessages) {
-					if messageText == "/start" && checkInId(chatId, chatIDs) {
-						upd.sendMessage(botUrl, "This chat was added to the sent list", chatId)
-						addNewChat(chatId)
-						chatIDs = append(chatIDs, chatId)
-						fmt.Println("Somebody added bot to new chat! Great!")
-						ansMessages = append(ansMessages, AnsMessages{MessageID: messageID, ChatID: chatId})
-					} else if messageText == "/quit" && !checkInId(chatId, chatIDs){
-						upd.sendMessage(botUrl, "This chat was deleted from send list", chatId)
-						removeChat(chatId)
-						chatIDs = removeSlice(chatIDs, chatId)
-						fmt.Println("Chat ", chatId, " was deleted from the list")
-						ansMessages = append(ansMessages, AnsMessages{MessageID: messageID, ChatID: chatId})
+			if checkInMes(messageID, chatId,  ansMessages) {
+				if messageText == "/start" && checkInId(chatId, chatIDs) {
+					upd.sendMessage(botUrl, "This chat was added to the sent list", chatId)
+					chatIDs = append(chatIDs, chatId)
+					fmt.Println("Somebody added bot to new chat! Great!")
+				} else if messageText == "/quit" && !checkInId(chatId, chatIDs){
+					upd.sendMessage(botUrl, "This chat was deleted from send list", chatId)
+					chatIDs = removeSlice(chatIDs, chatId)
+					fmt.Println("Chat ", chatId, " was deleted from the list")
+				} else if strings.HasPrefix(messageText, "/find") && len(messageText) > 6 {
+					getEbayJson(*EbayAppKey, strings.ReplaceAll(messageText[6:], " ", "+"), &ebr)
+					count, err = strconv.Atoi(ebr.ByKeywordsResponse[0].SearchResult[0].Count)
+					if err != nil {
+						panic(err.Error())
 					}
+
+					for j := 0; j < count; j++ {
+						name = ebr.ByKeywordsResponse[0].SearchResult[0].Item[j].Title[0]
+						price = ebr.ByKeywordsResponse[0].SearchResult[0].Item[j].SellingStatus[0].CurrentPrice[0].Value
+						url = ebr.ByKeywordsResponse[0].SearchResult[0].Item[j].ViewItemURL[0]
+						productsArray = append(productsArray, Product{Url: url, Price: price, Name: name})
+					}
+					sendPost(botUrl, chatId, productsArray)
+					productsArray = productsArray[:0]
 				}
+				ansMessages = append(ansMessages, AnsMessages{MessageID: messageID, ChatID: chatId})
 			}
 		}
 	}
