@@ -1,4 +1,4 @@
-# EbayFindBot\
+# EbayFindBot
 This is my small pet project made for myself. It has a pretty simple concept. This is a telegram bot that works with Finding Ebay API and sends products from there when the special word is typed.
 
 ## Getting Started
