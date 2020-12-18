@@ -249,11 +249,14 @@ func getEbayJson(key, keywords string, eb *EbayResult) {
 		panic(err.Error())
 	}
 
-	err = json.Unmarshal(body, &eb)
-
-	if err != nil {
-		panic(err.Error())
-	}
+  if !strings.HasPrefix(string(body), "<") {
+    err = json.Unmarshal(body, &eb)
+	  if err != nil {
+		  panic(err.Error())
+	  }
+  } else {
+    eb.ByKeywordsResponse[0].Ack[0] = "F"
+  }
 }
 
 func main() {
@@ -311,19 +314,23 @@ func main() {
 					fmt.Println("Chat ", chatId, " was deleted from the list")
 				} else if strings.HasPrefix(messageText, "/find") && len(messageText) > 6 {
 					getEbayJson(*EbayAppKey, strings.ReplaceAll(messageText[6:], " ", "+"), &ebr)
-					count, err = strconv.Atoi(ebr.ByKeywordsResponse[0].SearchResult[0].Count)
-					if err != nil {
-						panic(err.Error())
-					}
 
-					for j := 0; j < count; j++ {
-						name = ebr.ByKeywordsResponse[0].SearchResult[0].Item[j].Title[0]
-						price = ebr.ByKeywordsResponse[0].SearchResult[0].Item[j].SellingStatus[0].CurrentPrice[0].Value
-						url = ebr.ByKeywordsResponse[0].SearchResult[0].Item[j].ViewItemURL[0]
-						productsArray = append(productsArray, Product{Url: url, Price: price, Name: name})
-					}
-					sendPost(botUrl, chatId, productsArray)
-					productsArray = productsArray[:0]
+          if ebr.ByKeywordsResponse[0].Ack[0] != "F" {
+					  count, err = strconv.Atoi(ebr.ByKeywordsResponse[0].SearchResult[0].Count)
+					  if err != nil {
+						  panic(err.Error())
+					  }
+					  for j := 0; j < count; j++ {
+						  name = ebr.ByKeywordsResponse[0].SearchResult[0].Item[j].Title[0]
+						  price = ebr.ByKeywordsResponse[0].SearchResult[0].Item[j].SellingStatus[0].CurrentPrice[0].Value
+						  url = ebr.ByKeywordsResponse[0].SearchResult[0].Item[j].ViewItemURL[0]
+						  productsArray = append(productsArray, Product{Url: url, Price: price, Name: name})
+					  }
+					  sendPost(botUrl, chatId, productsArray)
+					  productsArray = productsArray[:0]
+          } else {
+            upd.sendMessage(botUrl, "Sorry, but you can type only latin letters :(", chatId)
+          }
 				}
 				ansMessages = append(ansMessages, AnsMessages{MessageID: messageID, ChatID: chatId})
 			}
