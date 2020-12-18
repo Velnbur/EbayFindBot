@@ -8,8 +8,8 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strconv"
-	"time"
 	"strings"
+	"time"
 )
 
 const telegramUrl = "https://api.telegram.org/bot%s/"
@@ -21,7 +21,6 @@ const EbayUrl = "https://svcs.ebay.com/services/search/FindingService/v1?" +
 	"RESPONSE-DATA-FORMAT=JSON&" +
 	"REST-PAYLOAD&" +
 	"keywords=%s&"
-
 
 type EbayResult struct {
 	ByKeywordsResponse []struct {
@@ -94,11 +93,11 @@ type ChannelPost struct {
 	} `json:"chat"`
 	Date int    `json:"date"`
 	Text string `json:"text"`
- }
+}
 
 type Result struct {
-	UpdateID 	int     	`json:"update_id"`
-	Message  	Message 	`json:"message,omitempty"`
+	UpdateID    int         `json:"update_id"`
+	Message     Message     `json:"message,omitempty"`
 	ChannelPost ChannelPost `json:"channel_post,omitempty"`
 }
 
@@ -174,13 +173,19 @@ func (u Update) sendMessage(url, text string, chatID int) {
 func sendPost(url string, chatID int, products []Product) error {
 	var messageText string
 	var text string
+	var name string
 
 	messageText = "The best products that I found on Ebay: \n"
 
 	for i := 0; i < len(products); i++ {
+		name = products[i].Name
+		if len(products[i].Name) > 20 {
+			name = name[:20]
+		}
+
 		text = fmt.Sprintf("<a href=\"%s\">%s...</a> Price: %s\n",
 			products[i].Url,
-			products[i].Name[:20],
+			name,
 			products[i].Price)
 
 		messageText += strconv.Itoa(i+1) + ". " + text
@@ -189,7 +194,7 @@ func sendPost(url string, chatID int, products []Product) error {
 	message, err := json.Marshal(map[string]string{
 		"chat_id":    strconv.Itoa(chatID),
 		"parse_mode": "HTML",
-		"text":    messageText,
+		"text":       messageText,
 	})
 
 	if err != nil {
@@ -216,15 +221,15 @@ func checkInId(id int, list []int) bool {
 }
 
 func checkInMes(message, chat int, answers []AnsMessages) bool {
-	for i := 0; i < len(answers); i ++ {
-		if answers[i].MessageID == message && answers[i].ChatID == chat{
+	for i := 0; i < len(answers); i++ {
+		if answers[i].MessageID == message && answers[i].ChatID == chat {
 			return false
 		}
 	}
 	return true
 }
 
-func removeSlice(s []int,  num int) []int {
+func removeSlice(s []int, num int) []int {
 	for i := 0; i < len(s); i++ {
 		if s[i] == num {
 			return append(s[:i], s[i+1:]...)
@@ -232,7 +237,6 @@ func removeSlice(s []int,  num int) []int {
 	}
 	return s
 }
-
 
 func getEbayJson(key, keywords string, eb *EbayResult) {
 	url := fmt.Sprintf(EbayUrl, key, keywords)
@@ -249,14 +253,14 @@ func getEbayJson(key, keywords string, eb *EbayResult) {
 		panic(err.Error())
 	}
 
-  if !strings.HasPrefix(string(body), "<") {
-    err = json.Unmarshal(body, &eb)
-	  if err != nil {
-		  panic(err.Error())
-	  }
-  } else {
-    eb.ByKeywordsResponse[0].Ack[0] = "F"
-  }
+	if !strings.HasPrefix(string(body), "<") {
+		err = json.Unmarshal(body, &eb)
+		if err != nil {
+			panic(err.Error())
+		}
+	} else {
+		eb.ByKeywordsResponse[0].Ack[0] = "F"
+	}
 }
 
 func main() {
@@ -303,34 +307,34 @@ func main() {
 				messageID = upd.Result[i].Message.MessageID
 			}
 
-			if checkInMes(messageID, chatId,  ansMessages) {
+			if checkInMes(messageID, chatId, ansMessages) {
 				if messageText == "/start" && checkInId(chatId, chatIDs) {
 					upd.sendMessage(botUrl, "This chat was added to the sent list", chatId)
 					chatIDs = append(chatIDs, chatId)
 					fmt.Println("Somebody added bot to new chat! Great!")
-				} else if messageText == "/quit" && !checkInId(chatId, chatIDs){
+				} else if messageText == "/quit" && !checkInId(chatId, chatIDs) {
 					upd.sendMessage(botUrl, "This chat was deleted from send list", chatId)
 					chatIDs = removeSlice(chatIDs, chatId)
 					fmt.Println("Chat ", chatId, " was deleted from the list")
 				} else if strings.HasPrefix(messageText, "/find") && len(messageText) > 6 {
 					getEbayJson(*EbayAppKey, strings.ReplaceAll(messageText[6:], " ", "+"), &ebr)
 
-          if ebr.ByKeywordsResponse[0].Ack[0] != "F" {
-					  count, err = strconv.Atoi(ebr.ByKeywordsResponse[0].SearchResult[0].Count)
-					  if err != nil {
-						  panic(err.Error())
-					  }
-					  for j := 0; j < count; j++ {
-						  name = ebr.ByKeywordsResponse[0].SearchResult[0].Item[j].Title[0]
-						  price = ebr.ByKeywordsResponse[0].SearchResult[0].Item[j].SellingStatus[0].CurrentPrice[0].Value
-						  url = ebr.ByKeywordsResponse[0].SearchResult[0].Item[j].ViewItemURL[0]
-						  productsArray = append(productsArray, Product{Url: url, Price: price, Name: name})
-					  }
-					  sendPost(botUrl, chatId, productsArray)
-					  productsArray = productsArray[:0]
-          } else {
-            upd.sendMessage(botUrl, "Sorry, but you can type only latin letters :(", chatId)
-          }
+					if ebr.ByKeywordsResponse[0].Ack[0] != "F" {
+						count, err = strconv.Atoi(ebr.ByKeywordsResponse[0].SearchResult[0].Count)
+						if err != nil {
+							panic(err.Error())
+						}
+						for j := 0; j < count; j++ {
+							name = ebr.ByKeywordsResponse[0].SearchResult[0].Item[j].Title[0]
+							price = ebr.ByKeywordsResponse[0].SearchResult[0].Item[j].SellingStatus[0].CurrentPrice[0].Value
+							url = ebr.ByKeywordsResponse[0].SearchResult[0].Item[j].ViewItemURL[0]
+							productsArray = append(productsArray, Product{Url: url, Price: price, Name: name})
+						}
+						sendPost(botUrl, chatId, productsArray)
+						productsArray = productsArray[:0]
+					} else {
+						upd.sendMessage(botUrl, "Sorry, but you can type only latin letters :(", chatId)
+					}
 				}
 				ansMessages = append(ansMessages, AnsMessages{MessageID: messageID, ChatID: chatId})
 			}
